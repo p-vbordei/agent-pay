@@ -1,6 +1,6 @@
-# agent-pay — v0.1 specification (DRAFT)
+# agent-pay — v1.0 specification
 
-**Status:** draft, not yet implemented. v0.1 intentionally requires a Lightning node (BYO via LND REST or NWC).
+**Status:** stable. Reference implementation at version 0.1.0. Requires a Lightning node (BYO via LND REST; NWC and `did:web` deferred to v0.2).
 
 ## Abstract
 
