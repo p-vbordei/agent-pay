@@ -78,3 +78,47 @@ test('fetchWithL402 rejects when BOLT11 amount mismatches envelope price', async
     }),
   ).rejects.toThrow(/amount-mismatch|mismatches/)
 })
+
+test('fetchWithL402 throws when X-Payment-Receipt JWS is tampered', async () => {
+  const kp = await generateKeyPair()
+  const did = didKeyFromPublicKey(kp.publicKey)
+  const ledger = new MemoryLedger()
+  const server = new MemoryNode({ ledger, name: 'server' })
+  const wallet = new MemoryNode({ ledger, name: 'client' })
+
+  const app = new Hono()
+  app.use(
+    '/r',
+    paywall({
+      serverDid: did,
+      serverPrivateKey: kp.privateKey,
+      price_msat: 1000n,
+      resource: '/r',
+      lightning: server,
+      tokenSecret: SECRET,
+    }),
+  )
+  app.get('/r', (c) => c.json({ ok: true }))
+
+  const tamperer = (async (url: string, init?: RequestInit) => {
+    const res = await app.request(url, init)
+    const receipt = res.headers.get('x-payment-receipt')
+    if (!receipt) return res
+    const parts = receipt.split('.')
+    if (parts.length !== 3) return res
+    const last = parts[2] ?? ''
+    const flipped = last.slice(0, -1) + (last.at(-1) === 'A' ? 'B' : 'A')
+    parts[2] = flipped
+    const headers = new Headers(res.headers)
+    headers.set('x-payment-receipt', parts.join('.'))
+    return new Response(res.body, { status: res.status, headers })
+  }) as typeof fetch
+
+  await expect(
+    fetchWithL402('http://x/r', {
+      wallet,
+      max_price_msat: 5000n,
+      fetch: tamperer,
+    }),
+  ).rejects.toThrow(/receipt/)
+})
