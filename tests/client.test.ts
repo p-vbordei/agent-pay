@@ -106,9 +106,8 @@ test('fetchWithL402 throws when X-Payment-Receipt JWS is tampered', async () => 
     if (!receipt) return res
     const parts = receipt.split('.')
     if (parts.length !== 3) return res
-    const last = parts[2] ?? ''
-    const flipped = last.slice(0, -1) + (last.at(-1) === 'A' ? 'B' : 'A')
-    parts[2] = flipped
+    const sig = parts[2] ?? ''
+    parts[2] = (sig[0] === 'A' ? 'B' : 'A') + sig.slice(1)
     const headers = new Headers(res.headers)
     headers.set('x-payment-receipt', parts.join('.'))
     return new Response(res.body, { status: res.status, headers })
