@@ -1,6 +1,6 @@
 {
   "name": "agent-pay",
-  "version": "0.1.0-alpha",
+  "version": "0.1.0",
   "description": "L402 + DID-signed invoices: agent-to-agent Lightning payments",
   "type": "module",
   "main": "src/index.ts",
