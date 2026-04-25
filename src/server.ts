@@ -2,6 +2,7 @@ import { randomBytes } from '@noble/hashes/utils'
 import type { Context, MiddlewareHandler } from 'hono'
 import { signInvoiceEnvelope, signReceipt } from './envelope.ts'
 import type { LightningNode } from './lightning.ts'
+import { ReplayCache } from './replay.ts'
 import { issueToken, verifyToken } from './token.ts'
 
 export type PaywallOptions = {
@@ -13,6 +14,7 @@ export type PaywallOptions = {
   tokenSecret: Uint8Array
   invoiceTtlSeconds?: number
   now?: () => Date
+  replay?: ReplayCache
 }
 
 const AUTH_RE = /^L402\s+([^:\s]+):([0-9a-fA-F]+)$/
@@ -34,6 +36,7 @@ function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
 export function paywall(opts: PaywallOptions): MiddlewareHandler {
   const ttl = opts.invoiceTtlSeconds ?? 300
   const now = opts.now ?? (() => new Date())
+  const replay = opts.replay ?? new ReplayCache()
   const issued = new Map<string, string>() // payment_hash → bolt11
 
   return async (c, next) => {
@@ -50,6 +53,10 @@ export function paywall(opts: PaywallOptions): MiddlewareHandler {
       return challenge(c, opts, ttl, now(), issued)
     }
 
+    if (replay.isUsed(payload.payment_hash)) {
+      return c.json({ error: 'preimage replayed' }, 401)
+    }
+
     const lookup = await opts.lightning.lookupInvoice(payload.payment_hash)
     if (!lookup.settled || !lookup.preimage) {
       return c.json({ error: 'invoice not settled' }, 401)
@@ -58,6 +65,8 @@ export function paywall(opts: PaywallOptions): MiddlewareHandler {
     if (!equalBytes(presented, lookup.preimage)) {
       return c.json({ error: 'preimage does not match settled invoice' }, 401)
     }
+
+    replay.markUsed(payload.payment_hash, Date.parse(payload.expires_at))
 
     await next()
 
