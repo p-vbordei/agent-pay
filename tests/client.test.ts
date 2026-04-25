@@ -88,17 +88,17 @@ test('fetchWithL402 throws when X-Payment-Receipt JWS is tampered', async () => 
 
   const app = new Hono()
   app.use(
-    '/r',
+    '/tamper',
     paywall({
       serverDid: did,
       serverPrivateKey: kp.privateKey,
       price_msat: 1000n,
-      resource: '/r',
+      resource: '/tamper',
       lightning: server,
       tokenSecret: SECRET,
     }),
   )
-  app.get('/r', (c) => c.json({ ok: true }))
+  app.get('/tamper', (c) => c.json({ ok: true }))
 
   const tamperer = (async (url: string, init?: RequestInit) => {
     const res = await app.request(url, init)
@@ -115,10 +115,72 @@ test('fetchWithL402 throws when X-Payment-Receipt JWS is tampered', async () => 
   }) as typeof fetch
 
   await expect(
-    fetchWithL402('http://x/r', {
+    fetchWithL402('http://x/tamper', {
       wallet,
       max_price_msat: 5000n,
       fetch: tamperer,
     }),
   ).rejects.toThrow(/receipt/)
+})
+
+test('fetchWithL402 rejects when envelope price exceeds max_price_msat', async () => {
+  const kp = await generateKeyPair()
+  const did = didKeyFromPublicKey(kp.publicKey)
+  const ledger = new MemoryLedger()
+  const server = new MemoryNode({ ledger, name: 'server' })
+  const wallet = new MemoryNode({ ledger, name: 'client' })
+
+  const app = new Hono()
+  app.use(
+    '/r',
+    paywall({
+      serverDid: did,
+      serverPrivateKey: kp.privateKey,
+      price_msat: 10_000n,
+      resource: '/r',
+      lightning: server,
+      tokenSecret: SECRET,
+    }),
+  )
+  app.get('/r', (c) => c.json({ ok: true }))
+
+  await expect(
+    fetchWithL402('http://x/r', {
+      wallet,
+      max_price_msat: 5000n,
+      fetch: ((url: string, init?: RequestInit) => app.request(url, init)) as typeof fetch,
+    }),
+  ).rejects.toThrow(/price-cap|cap|exceeds/)
+})
+
+test('fetchWithL402 rejects an envelope past expires_at', async () => {
+  const kp = await generateKeyPair()
+  const did = didKeyFromPublicKey(kp.publicKey)
+  const ledger = new MemoryLedger()
+  const server = new MemoryNode({ ledger, name: 'server' })
+  const wallet = new MemoryNode({ ledger, name: 'client' })
+
+  const app = new Hono()
+  app.use(
+    '/r',
+    paywall({
+      serverDid: did,
+      serverPrivateKey: kp.privateKey,
+      price_msat: 1000n,
+      resource: '/r',
+      lightning: server,
+      tokenSecret: SECRET,
+      invoiceTtlSeconds: 1,
+    }),
+  )
+  app.get('/r', (c) => c.json({ ok: true }))
+
+  await expect(
+    fetchWithL402('http://x/r', {
+      wallet,
+      max_price_msat: 5000n,
+      now: () => new Date(Date.now() + 10_000),
+      fetch: ((url: string, init?: RequestInit) => app.request(url, init)) as typeof fetch,
+    }),
+  ).rejects.toThrow(/expired/)
 })
