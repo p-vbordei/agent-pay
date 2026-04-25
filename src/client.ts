@@ -1,3 +1,4 @@
+import { parseInvoice } from './bolt11.ts'
 import { verifyInvoiceEnvelope, verifyReceipt } from './envelope.ts'
 import { publicKeyFromDidKey } from './keys.ts'
 import type { LightningNode } from './lightning.ts'
@@ -61,6 +62,14 @@ export async function fetchWithL402(
   }
   if (Date.parse(env.expires_at) <= now().getTime()) {
     throw new FetchWithL402Error(`invoice expired (${env.expires_at})`, 'expired')
+  }
+
+  const parsed = parseInvoice(bolt11)
+  if (parsed.amount_msat !== BigInt(env.price_msat)) {
+    throw new FetchWithL402Error(
+      `BOLT11 amount ${parsed.amount_msat} mismatches envelope price ${env.price_msat}`,
+      'amount-mismatch',
+    )
   }
 
   const pay = await opts.wallet.payInvoice(bolt11)

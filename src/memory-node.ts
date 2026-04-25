@@ -1,5 +1,6 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { randomBytes } from '@noble/hashes/utils'
+import bolt11 from 'bolt11'
 import type {
   Invoice,
   InvoiceCreateRequest,
@@ -21,6 +22,14 @@ function hex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+const REGTEST = {
+  bech32: 'bcrt',
+  pubKeyHash: 0x6f,
+  scriptHash: 0xc4,
+  validWitnessVersions: [0, 1],
+}
+const SIGNING_KEY_HEX = 'e126f68f7eafcc8b74f54d269fe206be715000f94dac067d1c04a8ca3b2db734'
+
 export class MemoryLedger {
   invoices = new Map<string, Entry>()
 }
@@ -28,7 +37,6 @@ export class MemoryLedger {
 export class MemoryNode implements LightningNode {
   private ledger: MemoryLedger
   private name: string
-  private counter = 0
   constructor(opts: { ledger: MemoryLedger; name: string }) {
     this.ledger = opts.ledger
     this.name = opts.name
@@ -37,17 +45,27 @@ export class MemoryNode implements LightningNode {
   async createInvoice(req: InvoiceCreateRequest): Promise<Invoice> {
     const preimage = randomBytes(32)
     const payment_hash = hex(sha256(preimage))
-    const id = `${this.name}-${++this.counter}`
-    const bolt11 = `lnbcrt${req.amount_msat}n1${payment_hash.slice(0, 16)}${id}`
+    const encoded = bolt11.encode({
+      network: REGTEST,
+      millisatoshis: req.amount_msat.toString(),
+      timestamp: Math.floor(Date.now() / 1000),
+      tags: [
+        { tagName: 'payment_hash', data: payment_hash },
+        { tagName: 'description', data: req.memo ?? '' },
+        { tagName: 'expire_time', data: req.expiry_seconds ?? 300 },
+      ],
+    })
+    const signed = bolt11.sign(encoded, SIGNING_KEY_HEX)
+    const paymentRequest = signed.paymentRequest as string
     this.ledger.invoices.set(payment_hash, {
       amount_msat: req.amount_msat,
       payment_hash,
       preimage,
-      bolt11,
+      bolt11: paymentRequest,
       settled: false,
       payee: this.name,
     })
-    return { bolt11, payment_hash }
+    return { bolt11: paymentRequest, payment_hash }
   }
 
   async lookupInvoice(payment_hash: string): Promise<InvoiceLookup> {
