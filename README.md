@@ -10,7 +10,64 @@ Concretely: a server middleware that emits `402 Payment Required` with a DID-sig
 
 ## Status
 
-**0.0 — design phase.** Draft spec in [SPEC.md](./SPEC.md). No code yet. Scope intentionally narrow — bring your own Lightning node.
+**0.1.0 — shipped.** [SPEC.md](./SPEC.md) v1.0, reference library in `src/`, conformance vectors in `conformance/`.
+
+## Quickstart
+
+```bash
+git clone <repo>
+cd agent-pay
+bun install
+bun run demo
+```
+
+Prints: server DID, paid response payload, signed receipt — all in-process, no docker.
+
+```ts
+import { Hono } from 'hono'
+import { paywall } from 'agent-pay/server'
+import { fetchWithL402 } from 'agent-pay/client'
+import { generateKeyPair, didKeyFromPublicKey, MemoryLedger, MemoryNode } from 'agent-pay'
+
+const kp = await generateKeyPair()
+const did = didKeyFromPublicKey(kp.publicKey)
+const ledger = new MemoryLedger()
+const node = new MemoryNode({ ledger, name: 'server' })
+
+const app = new Hono()
+app.use('/report', paywall({
+  serverDid: did, serverPrivateKey: kp.privateKey,
+  price_msat: 1000n, resource: '/report',
+  lightning: node, tokenSecret: crypto.getRandomValues(new Uint8Array(32)),
+}))
+app.get('/report', (c) => c.json({ data: '…' }))
+
+const wallet = new MemoryNode({ ledger, name: 'client' })
+const res = await fetchWithL402('http://localhost:4242/report', {
+  wallet, max_price_msat: 5000n, expectedDid: did,
+})
+```
+
+### Running against real Lightning (polar regtest)
+
+```bash
+./scripts/polar-up.sh
+./scripts/polar-fund.sh
+export LND_ALICE_URL=https://localhost:8081
+export LND_ALICE_MACAROON_HEX=$(docker compose -f docker-compose.polar.yml exec -T alice xxd -p -c 99999 /root/.lnd/data/chain/bitcoin/regtest/admin.macaroon | tr -d '\n')
+export LND_BOB_URL=https://localhost:8082
+export LND_BOB_MACAROON_HEX=$(docker compose -f docker-compose.polar.yml exec -T bob xxd -p -c 99999 /root/.lnd/data/chain/bitcoin/regtest/admin.macaroon | tr -d '\n')
+export NODE_TLS_REJECT_UNAUTHORIZED=0
+AGENT_PAY_INTEGRATION=1 bun test
+```
+
+### Conformance
+
+```bash
+bun run conformance
+```
+
+Outputs: `5/5 vectors passed` (C1×2, C2, C3, C4).
 
 ## The gap
 
@@ -20,14 +77,18 @@ No canonical repo implements "agent A signs a Lightning invoice with a `did:key`
 
 ## Scope — v0.1 (intentionally tight)
 
-**In scope**
+**In scope (v0.1)**
 
-- Server middleware (Express / Fastify) emitting DID-signed `402` responses
-- Client fetch wrapper verifying DID, paying, retrying
-- `did:key` signer (≤ 200 LoC wrapping `@noble/curves`)
-- Integration with NWC (Nostr Wallet Connect) **or** LND REST
-- Polar-based regtest harness
-- AP2 PaymentMandate adapter (stretch)
+- Hono server middleware emitting DID-signed `402` responses
+- Client `fetchWithL402` wrapper: verifies JWS, enforces price cap + expires_at, pays, retries, verifies receipt
+- `did:key` signer (Ed25519, multicodec 0xed01)
+- LND REST adapter (BYO node) + in-memory fake for tests
+- Polar-style docker-compose regtest harness
+- Conformance vectors C1–C4
+
+**Deferred (v0.2)**
+
+- `did:web`, NWC adapter, real macaroon binary format, AP2 PaymentMandate adapter, embedded LDK-node
 
 **Out of scope**
 
@@ -66,23 +127,27 @@ Verdict: **MEDIUM — borderline easy-picking.** Easy only if scoped as "BYO nod
 - **PaidMCP** — glues L402 to MCP servers.
 - **AP2** — payment mandates on x402 / stablecoins; our Lightning path complements.
 
-## Implementation skeleton
+## Implementation
 
-Single repo, ~1.5k LoC TypeScript. Components:
+Single repo, < 1.2k LoC TypeScript. Components:
 
-- **`@agent-pay/server`** — Express / Fastify middleware emitting `402 Payment Required` with BOLT11 invoice + `WWW-Authenticate: L402` + a `did-invoice` JWS header binding `{ invoice_hash, did, price, resource }`.
-- **`@agent-pay/client`** — fetch wrapper that resolves DID, verifies JWS, pays via NWC or LND REST, retries with `Authorization: L402 <macaroon>:<preimage>`.
-- **`@agent-pay/did-signer`** — tiny `did:key` signer wrapping `@noble/curves`.
+- **`agent-pay/server`** — Hono middleware emitting `402 Payment Required` with BOLT11 invoice + `WWW-Authenticate: L402` + a `did-invoice` JWS header binding `{ invoice_hash, did, price, resource, expires_at, nonce }`.
+- **`agent-pay/client`** — `fetchWithL402` wrapper that resolves `did:key`, verifies JWS, enforces price/expiry, pays via a `LightningNode`, retries with `Authorization: L402 <token>:<preimage>`, verifies the receipt.
+- **`agent-pay/node/lnd-rest`** + **`agent-pay/node/memory`** — `LightningNode` impls.
 
-**Dependencies:** `bolt11`, `@getalby/sdk` (NWC), `did-resolver`, `jose`.
+**Runtime deps (7):** `@noble/ed25519`, `@noble/hashes`, `bolt11`, `canonicalize`, `hono`, `multiformats`, `zod`.
 
-## Conformance tests (polar regtest harness)
+## Conformance vectors
 
-1. Unsigned invoice → client rejects.
-2. Valid DID-signed invoice → paid → 200 with receipt.
-3. Replayed preimage → rejected.
+Run `bun run conformance` for `5/5 vectors passed`:
 
-Stretch: AP2-PaymentMandate adapter so Google-AP2 agents consume the same flow.
+- **C1-missing** — client rejects 402 missing `X-Did-Invoice`.
+- **C1-bad-sig** — client rejects 402 with tampered `X-Did-Invoice` JWS.
+- **C2** — valid invoice paid → 200 with verified `X-Payment-Receipt`.
+- **C3** — server rejects replayed preimage with 401.
+- **C4** — client rejects when `invoice_hash` mismatches BOLT11.
+
+All run against the in-memory fake (no docker). The polar harness runs the LND REST adapter integration test (gated by `AGENT_PAY_INTEGRATION=1`).
 
 ## License
 
