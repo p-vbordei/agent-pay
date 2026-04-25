@@ -29,3 +29,10 @@ venv/
 *.log
 tmp/
 .cache/
+
+# Bun
+bun.lockb
+
+# Polar regtest state
+.polar/
+volumes/
