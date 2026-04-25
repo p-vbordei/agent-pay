@@ -39,7 +39,23 @@ test('first request returns 402 with X-Did-Invoice and L402 challenge', async ()
   expect(res.headers.get('x-did-invoice')).toBeTruthy()
 })
 
-test('replayed preimage returns 401', async () => {
+test('SPEC §6 invoice-replay: each 402 carries a fresh nonce', async () => {
+  const { app } = await setup()
+  async function nonceFrom(): Promise<string> {
+    const res = await app.request('/report')
+    const jws = res.headers.get('x-did-invoice') ?? ''
+    const payloadB64 = jws.split('.')[1] ?? ''
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as {
+      nonce: string
+    }
+    return payload.nonce
+  }
+  const n1 = await nonceFrom()
+  const n2 = await nonceFrom()
+  expect(n1).not.toBe(n2)
+})
+
+test('SPEC §6 invoice-replay: replayed preimage returns 401', async () => {
   const { app, ledger } = await setup()
   const wallet = new MemoryNode({ ledger, name: 'wallet' })
   let lastAuth: string | undefined

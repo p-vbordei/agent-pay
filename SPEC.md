@@ -97,9 +97,9 @@ LDK-node embedded wallet is NOT in v0.1. Future versions may add it.
 ## 6. Security considerations
 
 - **Invoice-replay**: a BOLT11 invoice's `payment_hash` is unique; the Lightning network prevents double-spend of a preimage. The JWS `nonce` prevents the server from re-using the same signed `X-Did-Invoice` for multiple distinct invoices.
-- **DID revocation**: if the server's DID rotates its key, prior `X-Did-Invoice` values are still valid for their `expires_at` window but SHOULD be superseded on new requests.
+- **DID revocation**: if the server's DID rotates its key, prior `X-Did-Invoice` values are still valid for their `expires_at` window but SHOULD be superseded on new requests. v0.1 has no status-list revocation; clients SHOULD treat `expires_at` as the practical upper bound on stale-key acceptance. A status-list mechanism is deferred to v0.2.
 - **Overcharging**: clients MUST enforce `price_msat` caps. The JWS prevents servers from silently raising the price after signing; clients MUST also verify the BOLT11 amount matches `price_msat`.
-- **Privacy**: clients leak their paying wallet identity via the Lightning network. Use route-blinding / LN-onion if that matters.
+- **Privacy**: clients leak their paying wallet identity via the Lightning network. Use route-blinding / LN-onion if that matters. v0.1 does not implement route-blinding; users requiring payer privacy should pair `agent-pay` with an LN-onion-capable wallet.
 
 ## 7. AP2 compatibility (stretch)
 

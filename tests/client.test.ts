@@ -41,7 +41,7 @@ test('fetchWithL402 pays via fake node, retries, parses 200', async () => {
   expect(res.headers.get('x-payment-receipt')).toBeTruthy()
 })
 
-test('fetchWithL402 rejects when BOLT11 amount mismatches envelope price', async () => {
+test('SPEC §6 overcharging: BOLT11 amount must equal envelope price_msat', async () => {
   const kp = await generateKeyPair()
   const did = didKeyFromPublicKey(kp.publicKey)
   const ledger = new MemoryLedger()
@@ -122,7 +122,7 @@ test('fetchWithL402 throws when X-Payment-Receipt JWS is tampered', async () => 
   ).rejects.toThrow(/receipt/)
 })
 
-test('fetchWithL402 rejects when envelope price exceeds max_price_msat', async () => {
+test('SPEC §6 overcharging: client enforces max_price_msat cap', async () => {
   const kp = await generateKeyPair()
   const did = didKeyFromPublicKey(kp.publicKey)
   const ledger = new MemoryLedger()
@@ -152,7 +152,7 @@ test('fetchWithL402 rejects when envelope price exceeds max_price_msat', async (
   ).rejects.toThrow(/price-cap|cap|exceeds/)
 })
 
-test('fetchWithL402 rejects an envelope past expires_at', async () => {
+test('SPEC §6 DID-revocation boundary: client rejects envelope past expires_at', async () => {
   const kp = await generateKeyPair()
   const did = didKeyFromPublicKey(kp.publicKey)
   const ledger = new MemoryLedger()

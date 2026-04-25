@@ -36,6 +36,7 @@ No canonical repo implements "agent A signs a Lightning invoice with a `did:key`
 - A wallet UI
 - Custody solutions
 - Competing with AP2 — we want interop, not replacement
+- **Payer privacy** — v0.1 does not implement route-blinding; pair with an LN-onion-capable wallet if payer-side privacy matters (see SPEC §6).
 
 ## Dependencies and companions
 
