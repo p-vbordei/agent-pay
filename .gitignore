@@ -39,3 +39,4 @@ bun.lockb
 # Polar regtest state
 .polar/
 volumes/
+.claude/
