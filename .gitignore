@@ -33,6 +33,9 @@ tmp/
 # Bun
 bun.lockb
 
+# npm auth (project-local token shouldn't be committed)
+.npmrc
+
 # Polar regtest state
 .polar/
 volumes/

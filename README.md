@@ -25,9 +25,9 @@ Prints: server DID, paid response payload, signed receipt — all in-process, no
 
 ```ts
 import { Hono } from 'hono'
-import { paywall } from 'agent-pay/server'
-import { fetchWithL402 } from 'agent-pay/client'
-import { generateKeyPair, didKeyFromPublicKey, MemoryLedger, MemoryNode } from 'agent-pay'
+import { paywall } from '@p-vbordei/agent-pay/server'
+import { fetchWithL402 } from '@p-vbordei/agent-pay/client'
+import { generateKeyPair, didKeyFromPublicKey, MemoryLedger, MemoryNode } from '@p-vbordei/agent-pay'
 
 const kp = await generateKeyPair()
 const did = didKeyFromPublicKey(kp.publicKey)
