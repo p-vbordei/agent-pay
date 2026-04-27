@@ -1,5 +1,5 @@
 {
-  "name": "@vlad1987654123/agent-pay",
+  "name": "@p-vbordei/agent-pay",
   "version": "0.1.0",
   "description": "L402 + DID-signed invoices: agent-to-agent Lightning payments",
   "author": "Vlad Bordei <bordeivlad@gmail.com>",
