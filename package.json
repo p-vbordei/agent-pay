@@ -1,7 +1,27 @@
 {
-  "name": "@p-vbordei/agent-pay",
+  "name": "@vlad1987654123/agent-pay",
   "version": "0.1.0",
   "description": "L402 + DID-signed invoices: agent-to-agent Lightning payments",
+  "author": "Vlad Bordei <bordeivlad@gmail.com>",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/p-vbordei/agent-pay",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/p-vbordei/agent-pay.git"
+  },
+  "bugs": {
+    "url": "https://github.com/p-vbordei/agent-pay/issues"
+  },
+  "keywords": [
+    "lightning",
+    "l402",
+    "agents",
+    "did",
+    "payments",
+    "bun",
+    "hono",
+    "ed25519"
+  ],
   "type": "module",
   "main": "src/index.ts",
   "exports": {
@@ -11,8 +31,7 @@
     "./node/memory": "./src/memory-node.ts",
     "./node/lnd-rest": "./src/lnd-rest.ts"
   },
-  "files": ["src", "README.md", "SPEC.md", "LICENSE"],
-  "license": "Apache-2.0",
+  "files": ["src", "README.md", "SPEC.md", "LICENSE", "CHANGELOG.md"],
   "scripts": {
     "test": "bun test",
     "test:integration": "AGENT_PAY_INTEGRATION=1 bun test",
